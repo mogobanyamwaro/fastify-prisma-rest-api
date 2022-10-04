@@ -1,63 +1,44 @@
 import { FastifyReply, FastifyRequest } from "fastify";
+import { server } from "../../app";
 import { verifyPassword } from "../../utils/hash";
 import { CreateUserInput, LoginInput } from "./user.schema";
 import { createUser, findUserByEmail, findUsers } from "./user.service";
 
 export async function registerUserHandler(
-  request: FastifyRequest<{
-    Body: CreateUserInput;
-  }>,
+  request: FastifyRequest<{ Body: CreateUserInput }>,
   reply: FastifyReply
 ) {
   const body = request.body;
-
   try {
     const user = await createUser(body);
-
-    return reply.code(201).send(user);
-  } catch (e) {
-    console.log(e);
-    return reply.code(500).send(e);
+    return reply.status(201).send(user);
+  } catch (error) {
+    console.log(error);
+    return reply.status(500).send(error);
   }
 }
 
 export async function loginHandler(
-  request: FastifyRequest<{
-    Body: LoginInput;
-  }>,
-  reply: FastifyReply
+  request: FastifyRequest<{ Body: LoginInput }>,
+  resply: FastifyReply
 ) {
   const body = request.body;
-
-  // find a user by email
   const user = await findUserByEmail(body.email);
-
   if (!user) {
-    return reply.code(401).send({
-      message: "Invalid email or password",
-    });
+    return resply.status(401).send({ message: "User not found" });
   }
-
-  // verify password
   const correctPassword = verifyPassword({
-    candidatePassword: body.password,
-    salt: user.salt,
+    password: body.password,
     hash: user.password,
+    salt: user.salt,
   });
-
   if (correctPassword) {
-    const { password, salt, ...rest } = user;
-    // generate access token
-    return { accessToken: request.jwt.sign(rest) };
+    const { password, ...rest } = user;
+    return { accessToken: server.jwt.sign(rest) };
   }
-
-  return reply.code(401).send({
-    message: "Invalid email or password",
-  });
+  return resply.status(401).send({ message: "Incorrect password" });
 }
-
 export async function getUsersHandler() {
   const users = await findUsers();
-
   return users;
 }
